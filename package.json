@@ -1,0 +1,19 @@
+{
+  "name": "pdf-resize",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "generate-test-pdf": "node tests/generate-test-pdf.js",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.32.1",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "pdf-lib": "^1.17.1"
+  }
+}

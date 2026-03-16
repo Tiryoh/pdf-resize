@@ -1,0 +1,447 @@
+/* ==============================
+   PDF Resize Tool
+   Swiss-utility aesthetic
+   ============================== */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* --- Tokens --- */
+:root {
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-hover: #f6f5f3;
+  --text: #2c2c2c;
+  --text-secondary: #6b6b6b;
+  --text-muted: #9a9a9a;
+  --border: #e8e6e3;
+  --border-hover: #d0cdc8;
+  --accent: #1a7a6d;
+  --accent-hover: #15655a;
+  --accent-light: #e8f4f2;
+  --success: #2d8659;
+  --success-light: #eaf5f0;
+  --danger: #c44;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+/* --- Reset --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Base --- */
+body {
+  font-family: "DM Sans", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 2rem;
+}
+
+/* --- Header --- */
+header {
+  margin-bottom: 2.5rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-top: 0.375rem;
+  font-weight: 400;
+}
+
+/* --- Drop Zone --- */
+.drop-zone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.drop-zone:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.drop-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 3px rgba(26, 122, 109, 0.1);
+}
+
+.drop-zone.has-file {
+  border-color: var(--success);
+  border-style: solid;
+  background: var(--success-light);
+}
+
+.drop-icon {
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  transition: color 0.2s;
+}
+
+.drop-zone:hover .drop-icon {
+  color: var(--text-secondary);
+}
+
+.drop-zone.drag-over .drop-icon {
+  color: var(--accent);
+}
+
+.drop-zone p {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.drop-zone-hint {
+  color: var(--text-muted) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 400 !important;
+  margin-top: 0.25rem;
+}
+
+/* --- File Info --- */
+.file-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 0.625rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.file-name {
+  font-weight: 500;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+}
+
+.file-size {
+  color: var(--text-secondary);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  flex-shrink: 0;
+}
+
+/* --- Settings --- */
+.settings {
+  margin-top: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.settings summary {
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.settings summary:hover {
+  background: var(--surface-hover);
+}
+
+.settings summary::marker {
+  color: var(--text-muted);
+}
+
+.settings-grid {
+  padding: 0 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.setting-item label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.setting-item input[type="number"] {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  color: var(--text);
+  background: var(--bg);
+  transition: border-color 0.15s;
+}
+
+.setting-item input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(26, 122, 109, 0.1);
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.slider-group input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 4px;
+}
+
+.slider-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  min-width: 3em;
+  text-align: right;
+  color: var(--text);
+}
+
+.setting-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400 !important;
+  margin-top: 0.125rem;
+}
+
+.radio-group {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.radio-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 400;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.radio-group input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* --- Buttons --- */
+.compress-btn {
+  display: block;
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: 0.6875rem;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.compress-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.compress-btn:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.compress-btn:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.download-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.6875rem;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--success);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.download-btn:hover {
+  background: #257549;
+}
+
+.download-btn:active {
+  transform: scale(0.99);
+}
+
+/* --- Progress --- */
+.progress-section {
+  margin-top: 1.25rem;
+}
+
+.progress-bar-container {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+/* --- Result --- */
+.result-section {
+  margin-top: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.result-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.result-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* --- Footer --- */
+footer {
+  margin-top: 3rem;
+  padding-bottom: 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.footer-repo {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.notice {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+  margin-top: 0.25rem;
+}
+
+.github-link svg {
+  flex-shrink: 0;
+}
+
+.github-link:hover {
+  color: var(--text);
+}
+
+/* --- Responsive --- */
+@media (max-width: 480px) {
+  .container {
+    padding: 2rem 1rem 1.5rem;
+  }
+
+  .drop-zone {
+    padding: 2rem 1rem;
+  }
+
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+}
