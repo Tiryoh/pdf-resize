@@ -147,11 +147,56 @@ const ImageCompressor = (() => {
     });
   }
 
+  /**
+   * SMask (グレースケール) をJPEGに圧縮
+   * @param {Uint8Array} smaskPixels - 生グレースケールピクセルデータ
+   * @param {number} width
+   * @param {number} height
+   * @param {Object} options
+   * @param {number} options.quality - JPEG品質
+   * @param {number} [options.targetWidth] - リサイズ先の幅
+   * @param {number} [options.targetHeight] - リサイズ先の高さ
+   * @returns {Promise<{ jpegBytes: Uint8Array, newWidth: number, newHeight: number }>}
+   */
+  async function compressSmaskToJpeg(smaskPixels, width, height, options) {
+    const { quality = 0.80, targetWidth, targetHeight } = options;
+
+    // グレースケール → RGBA
+    const bitmap = await rawPixelsToImageBitmap(smaskPixels, width, height, 1);
+
+    let outW = targetWidth ?? width;
+    let outH = targetHeight ?? height;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, outW, outH);
+    bitmap.close();
+
+    const jpegBytes = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error('SMask toBlob failed')); return; }
+          blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
+        },
+        'image/jpeg',
+        quality
+      );
+    });
+
+    return { jpegBytes, newWidth: outW, newHeight: outH };
+  }
+
   return {
     rawPixelsToImageBitmap,
     jpegToImageBitmap,
     flattenWithWhiteBackground,
     compressToJpeg,
+    compressSmaskToJpeg,
   };
 
 })();

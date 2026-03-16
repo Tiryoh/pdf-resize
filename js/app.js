@@ -26,6 +26,54 @@
   let currentFile = null;
   let outputBlob = null;
 
+  // --- プリセット定義 ---
+
+  const PRESETS = {
+    light: {
+      jpegQuality: 0.90,
+      maxDimension: 4096,
+      minPixelSize: 500,
+      minByteSize: 200,
+      transparencyMode: 'compress',
+    },
+    standard: {
+      jpegQuality: 0.75,
+      maxDimension: 2048,
+      minPixelSize: 300,
+      minByteSize: 100,
+      transparencyMode: 'compress',
+    },
+    maximum: {
+      jpegQuality: 0.50,
+      maxDimension: 1024,
+      minPixelSize: 100,
+      minByteSize: 10,
+      transparencyMode: 'flatten',
+    },
+  };
+
+  let activePreset = 'standard';
+
+  function applyPreset(name) {
+    const p = PRESETS[name];
+    if (!p) return;
+
+    activePreset = name;
+    jpegQualityInput.value = p.jpegQuality;
+    jpegQualityValue.textContent = `${Math.round(p.jpegQuality * 100)}%`;
+    document.getElementById('maxDimension').value = p.maxDimension;
+    document.getElementById('minPixelSize').value = p.minPixelSize;
+    document.getElementById('minByteSize').value = p.minByteSize;
+
+    const radio = document.querySelector(`input[name="transparencyMode"][value="${p.transparencyMode}"]`);
+    if (radio) radio.checked = true;
+
+    // ボタンのアクティブ状態を更新
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.preset === name);
+    });
+  }
+
   // --- ユーティリティ ---
 
   function formatSize(bytes) {
@@ -96,10 +144,30 @@
     if (file) handleFile(file);
   });
 
+  // --- プリセット UI ---
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+  });
+
+  // 詳細設定を手動変更したらプリセットのアクティブ表示を解除
+  function clearActivePreset() {
+    activePreset = null;
+    document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+  }
+
   // --- 設定 UI ---
 
   jpegQualityInput.addEventListener('input', () => {
     jpegQualityValue.textContent = `${Math.round(parseFloat(jpegQualityInput.value) * 100)}%`;
+    clearActivePreset();
+  });
+
+  document.getElementById('maxDimension').addEventListener('input', clearActivePreset);
+  document.getElementById('minPixelSize').addEventListener('input', clearActivePreset);
+  document.getElementById('minByteSize').addEventListener('input', clearActivePreset);
+  document.querySelectorAll('input[name="transparencyMode"]').forEach(r => {
+    r.addEventListener('change', clearActivePreset);
   });
 
   // --- 圧縮処理 ---

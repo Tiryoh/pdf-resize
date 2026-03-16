@@ -172,13 +172,18 @@ const PdfProcessor = (() => {
       return { shouldProcess: false, reason: '透過画像 (スキップ設定)' };
     }
 
+    // Flate/raw画像はJPEG変換の効果が高いため閾値を下げる
+    const isRawOrFlate = (filter === '/FlateDecode' || filter === null);
+    const effectivePixelThreshold = isRawOrFlate ? Math.floor(minPixelThreshold / 4) : minPixelThreshold;
+    const effectiveByteThreshold = isRawOrFlate ? Math.floor(minByteThreshold / 4) : minByteThreshold;
+
     // ピクセル数チェック
-    if (totalPixels < minPixelThreshold) {
+    if (totalPixels < effectivePixelThreshold) {
       return { shouldProcess: false, reason: `小さい画像 (${width}x${height})` };
     }
 
     // データサイズチェック
-    if (dataSize < minByteThreshold) {
+    if (dataSize < effectiveByteThreshold) {
       return { shouldProcess: false, reason: `データサイズ小 (${(dataSize / 1024).toFixed(1)}KB)` };
     }
 
@@ -186,25 +191,52 @@ const PdfProcessor = (() => {
   }
 
   /**
+   * SMaskオブジェクトからピクセルデータをデコード
+   * @param {PDFRef} smaskRef
+   * @param {PDFDocument} pdfDoc
+   * @returns {{ pixels: Uint8Array, width: number, height: number } | null}
+   */
+  function decodeSmask(smaskRef, pdfDoc) {
+    const smaskObj = pdfDoc.context.lookup(smaskRef);
+    if (!(smaskObj instanceof PDFRawStream) && !(smaskObj instanceof PDFStream)) {
+      return null;
+    }
+    const smaskDict = smaskObj.dict;
+    const smaskW = Number(getNumericValue(smaskDict.get(PDFName.of('Width'))));
+    const smaskH = Number(getNumericValue(smaskDict.get(PDFName.of('Height'))));
+    const smaskFilter = resolveFilter(smaskDict.get(PDFName.of('Filter')));
+
+    let smaskPixels;
+    if (smaskFilter === '/FlateDecode') {
+      smaskPixels = pako.inflate(smaskObj.contents);
+    } else if (smaskFilter === '/DCTDecode') {
+      // 既にJPEG圧縮されたSMaskはスキップ
+      return null;
+    } else {
+      smaskPixels = smaskObj.contents;
+    }
+
+    return { pixels: smaskPixels, width: smaskW, height: smaskH };
+  }
+
+  /**
    * 画像ストリームをデコードして生ピクセルデータを取得
    * @param {Object} imageInfo
    * @param {PDFDocument} pdfDoc
-   * @returns {Promise<ImageBitmap>}
+   * @param {string} transparencyMode - 'flatten' | 'skip' | 'compress'
+   * @returns {Promise<{ bitmap: ImageBitmap, smaskData: Object|null }>}
    */
-  async function decodeImage(imageInfo, pdfDoc) {
+  async function decodeImage(imageInfo, pdfDoc, transparencyMode) {
     const { obj, filter, width, height, colorSpace, smaskRef } = imageInfo;
     const components = getComponentCount(colorSpace);
     let bitmap;
 
     if (filter === '/DCTDecode') {
-      // JPEG — 生のストリームデータがJPEGそのもの
       const jpegBytes = obj.contents;
       bitmap = await ImageCompressor.jpegToImageBitmap(jpegBytes);
     } else if (filter === '/FlateDecode' || filter === null) {
-      // Flate圧縮 or 無圧縮
       let rawPixels;
       if (filter === '/FlateDecode') {
-        // pako で inflate (pdf-lib が pako をバンドル)
         rawPixels = pako.inflate(obj.contents);
       } else {
         rawPixels = obj.contents;
@@ -214,29 +246,25 @@ const PdfProcessor = (() => {
       throw new Error(`Unsupported filter: ${filter}`);
     }
 
+    let smaskData = null;
+
     // SMask処理
     if (smaskRef) {
-      const smaskObj = pdfDoc.context.lookup(smaskRef);
-      if (smaskObj instanceof PDFRawStream || smaskObj instanceof PDFStream) {
-        const smaskDict = smaskObj.dict;
-        const smaskW = getNumericValue(smaskDict.get(PDFName.of('Width')));
-        const smaskH = getNumericValue(smaskDict.get(PDFName.of('Height')));
-        const smaskFilter = resolveFilter(smaskDict.get(PDFName.of('Filter')));
-
-        let smaskPixels;
-        if (smaskFilter === '/FlateDecode') {
-          smaskPixels = pako.inflate(smaskObj.contents);
+      const decoded = decodeSmask(smaskRef, pdfDoc);
+      if (decoded) {
+        if (transparencyMode === 'compress') {
+          // SMaskを個別に保持して後でJPEG圧縮する
+          smaskData = { ...decoded, ref: smaskRef };
         } else {
-          smaskPixels = smaskObj.contents;
+          // 従来: 白背景で合成
+          bitmap = await ImageCompressor.flattenWithWhiteBackground(
+            bitmap, decoded.pixels, decoded.width, decoded.height
+          );
         }
-
-        bitmap = await ImageCompressor.flattenWithWhiteBackground(
-          bitmap, smaskPixels, Number(smaskW), Number(smaskH)
-        );
       }
     }
 
-    return bitmap;
+    return { bitmap, smaskData };
   }
 
   /**
@@ -247,8 +275,9 @@ const PdfProcessor = (() => {
    * @param {Uint8Array} jpegBytes
    * @param {number} width - 圧縮後の幅
    * @param {number} height - 圧縮後の高さ
+   * @param {PDFRef} [smaskRef] - SMask参照 (省略時はSMaskなし)
    */
-  function replaceImageStream(pdfDoc, originalRef, jpegBytes, width, height) {
+  function replaceImageStream(pdfDoc, originalRef, jpegBytes, width, height, smaskRef) {
     const context = pdfDoc.context;
 
     const newDict = new Map();
@@ -260,11 +289,41 @@ const PdfProcessor = (() => {
     newDict.set(PDFName.of('BitsPerComponent'), context.obj(8));
     newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
     newDict.set(PDFName.of('Length'), context.obj(jpegBytes.length));
+    if (smaskRef) {
+      newDict.set(PDFName.of('SMask'), smaskRef);
+    }
 
     const dictObj = PDFDict.fromMapWithContext(newDict, context);
     const newStream = PDFRawStream.of(dictObj, jpegBytes);
 
     context.assign(originalRef, newStream);
+  }
+
+  /**
+   * SMaskストリームをJPEG圧縮して置換する
+   * @param {PDFDocument} pdfDoc
+   * @param {PDFRef} smaskRef - 既存のSMask参照
+   * @param {Uint8Array} jpegBytes - JPEG圧縮済みのグレースケールデータ
+   * @param {number} width
+   * @param {number} height
+   */
+  function replaceSmaskStream(pdfDoc, smaskRef, jpegBytes, width, height) {
+    const context = pdfDoc.context;
+
+    const newDict = new Map();
+    newDict.set(PDFName.of('Type'), PDFName.of('XObject'));
+    newDict.set(PDFName.of('Subtype'), PDFName.of('Image'));
+    newDict.set(PDFName.of('Width'), context.obj(width));
+    newDict.set(PDFName.of('Height'), context.obj(height));
+    newDict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceGray'));
+    newDict.set(PDFName.of('BitsPerComponent'), context.obj(8));
+    newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+    newDict.set(PDFName.of('Length'), context.obj(jpegBytes.length));
+
+    const dictObj = PDFDict.fromMapWithContext(newDict, context);
+    const newStream = PDFRawStream.of(dictObj, jpegBytes);
+
+    context.assign(smaskRef, newStream);
   }
 
   /**
@@ -307,8 +366,10 @@ const PdfProcessor = (() => {
       }
 
       try {
+        const transparencyMode = settings.transparencyMode ?? 'flatten';
+
         // デコード
-        const bitmap = await decodeImage(img, pdfDoc);
+        const { bitmap, smaskData } = await decodeImage(img, pdfDoc, transparencyMode);
 
         // 再圧縮
         const compressedBytes = await ImageCompressor.compressToJpeg(bitmap, {
@@ -321,9 +382,12 @@ const PdfProcessor = (() => {
         const originalBytes = img.dataSize;
         originalTotalBytes += originalBytes;
 
+        // Flate/raw画像はほぼ確実に圧縮効果があるため安全弁を緩める
+        const isRawOrFlate = (img.filter === '/FlateDecode' || img.filter === null);
+        const effectiveSkipRatio = isRawOrFlate ? 1.0 : skipIfNoGain;
+
         // サイズ比較（安全弁）
-        if (compressedBytes.length >= originalBytes * skipIfNoGain) {
-          // 圧縮効果なし → 元のまま
+        if (compressedBytes.length >= originalBytes * effectiveSkipRatio) {
           skippedCount++;
           compressedTotalBytes += originalBytes;
           onProgress?.(i + 1, totalImages, {
@@ -346,8 +410,30 @@ const PdfProcessor = (() => {
           newHeight = Math.round(newHeight * scale);
         }
 
+        // SMask個別JPEG圧縮
+        let smaskRefForReplace = undefined;
+        if (smaskData) {
+          const smaskQuality = Math.min((settings.jpegQuality ?? 0.75) + 0.1, 1.0);
+          // SMaskも本体画像と同じ比率でリサイズ
+          let smaskTargetW = smaskData.width;
+          let smaskTargetH = smaskData.height;
+          if (maxSide > maxDim) {
+            const scale = maxDim / maxSide;
+            smaskTargetW = Math.round(smaskData.width * scale);
+            smaskTargetH = Math.round(smaskData.height * scale);
+          }
+
+          const smaskResult = await ImageCompressor.compressSmaskToJpeg(
+            smaskData.pixels, smaskData.width, smaskData.height,
+            { quality: smaskQuality, targetWidth: smaskTargetW, targetHeight: smaskTargetH }
+          );
+
+          replaceSmaskStream(pdfDoc, smaskData.ref, smaskResult.jpegBytes, smaskResult.newWidth, smaskResult.newHeight);
+          smaskRefForReplace = smaskData.ref;
+        }
+
         // 置換
-        replaceImageStream(pdfDoc, img.ref, compressedBytes, newWidth, newHeight);
+        replaceImageStream(pdfDoc, img.ref, compressedBytes, newWidth, newHeight, smaskRefForReplace);
         compressedCount++;
         compressedTotalBytes += compressedBytes.length;
 

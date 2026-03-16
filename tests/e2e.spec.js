@@ -4,10 +4,11 @@ const path = require('path');
 const fs = require('fs');
 
 const TEST_PDF_PATH = path.join(__dirname, 'test.pdf');
+const TEST_SMASK_PDF_PATH = path.join(__dirname, 'test-smask.pdf');
 
 test.beforeAll(async () => {
   // テスト用PDFが存在するか確認
-  if (!fs.existsSync(TEST_PDF_PATH)) {
+  if (!fs.existsSync(TEST_PDF_PATH) || !fs.existsSync(TEST_SMASK_PDF_PATH)) {
     throw new Error(
       'テスト用PDFが見つかりません。先に node tests/generate-test-pdf.js を実行してください。'
     );
@@ -134,6 +135,109 @@ test.describe('PDF Resize Tool', () => {
       const stats = fs.statSync(filePath);
       expect(stats.size).toBeGreaterThan(0);
     }
+  });
+
+  test('プリセットを選択するとパラメータが自動設定される', async ({ page }) => {
+    await page.goto('/');
+
+    // 「最大圧縮」プリセットを選択
+    await page.locator('.preset-btn[data-preset="maximum"]').click();
+    await expect(page.locator('.preset-btn[data-preset="maximum"]')).toHaveClass(/active/);
+    await expect(page.locator('.preset-btn[data-preset="standard"]')).not.toHaveClass(/active/);
+
+    // パラメータが変更されている
+    await page.locator('details.settings summary').click();
+    await expect(page.locator('#jpegQualityValue')).toHaveText('50%');
+    await expect(page.locator('#maxDimension')).toHaveValue('1024');
+    await expect(page.locator('#minPixelSize')).toHaveValue('100');
+    await expect(page.locator('#minByteSize')).toHaveValue('10');
+
+    // 「軽量」プリセットに切り替え
+    await page.locator('.preset-btn[data-preset="light"]').click();
+    await expect(page.locator('.preset-btn[data-preset="light"]')).toHaveClass(/active/);
+    await expect(page.locator('#jpegQualityValue')).toHaveText('90%');
+    await expect(page.locator('#maxDimension')).toHaveValue('4096');
+
+    // 手動変更でプリセットのアクティブが外れる
+    await page.locator('#maxDimension').fill('3000');
+    await page.locator('#maxDimension').dispatchEvent('input');
+    await expect(page.locator('.preset-btn[data-preset="light"]')).not.toHaveClass(/active/);
+  });
+
+  test('Flate画像のJPEG変換で実際にサイズが減る', async ({ page }) => {
+    await page.goto('/');
+
+    // test.pdf はFlate圧縮の大きなPNG画像を含む
+    await page.locator('#fileInput').setInputFiles(TEST_PDF_PATH);
+    await page.locator('#compressBtn').click();
+    await expect(page.locator('#resultSection')).toBeVisible({ timeout: 30000 });
+
+    // 削減率が正の値であることを検証
+    const rateText = await page.locator('#reductionRate').textContent();
+    const rate = parseFloat(rateText);
+    expect(rate).toBeGreaterThan(0);
+
+    // 処理画像数が1枚以上
+    const statsText = await page.locator('#imageStats').textContent();
+    const match = statsText.match(/^(\d+)枚/);
+    expect(match).toBeTruthy();
+    expect(parseInt(match[1], 10)).toBeGreaterThanOrEqual(1);
+  });
+
+  test('SMask付きPDFの個別圧縮でサイズが減る', async ({ page }) => {
+    await page.goto('/');
+
+    const originalSize = fs.statSync(TEST_SMASK_PDF_PATH).size;
+
+    // デフォルト設定(transparencyMode=compress)で圧縮
+    await page.locator('#fileInput').setInputFiles(TEST_SMASK_PDF_PATH);
+    await page.locator('#compressBtn').click();
+    await expect(page.locator('#resultSection')).toBeVisible({ timeout: 30000 });
+
+    // 削減率が正の値であることを検証
+    const rateText = await page.locator('#reductionRate').textContent();
+    const rate = parseFloat(rateText);
+    expect(rate).toBeGreaterThan(0);
+
+    // ダウンロードしたPDFのサイズが元より小さいことを直接確認
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#downloadBtn').click();
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    if (downloadPath) {
+      const compressedSize = fs.statSync(downloadPath).size;
+      expect(compressedSize).toBeLessThan(originalSize);
+    }
+  });
+
+  test('最大圧縮プリセットは標準より小さい出力を生成する', async ({ page }) => {
+    // 1回目: 標準プリセットで圧縮
+    await page.goto('/');
+    await page.locator('#fileInput').setInputFiles(TEST_PDF_PATH);
+    await page.locator('#compressBtn').click();
+    await expect(page.locator('#resultSection')).toBeVisible({ timeout: 30000 });
+
+    const standardDownloadPromise = page.waitForEvent('download');
+    await page.locator('#downloadBtn').click();
+    const standardDownload = await standardDownloadPromise;
+    const standardPath = await standardDownload.path();
+    const standardSize = standardPath ? fs.statSync(standardPath).size : Infinity;
+
+    // 2回目: 最大圧縮プリセットで圧縮
+    await page.goto('/');
+    await page.locator('.preset-btn[data-preset="maximum"]').click();
+    await page.locator('#fileInput').setInputFiles(TEST_PDF_PATH);
+    await page.locator('#compressBtn').click();
+    await expect(page.locator('#resultSection')).toBeVisible({ timeout: 30000 });
+
+    const maxDownloadPromise = page.waitForEvent('download');
+    await page.locator('#downloadBtn').click();
+    const maxDownload = await maxDownloadPromise;
+    const maxPath = await maxDownload.path();
+    const maxSize = maxPath ? fs.statSync(maxPath).size : Infinity;
+
+    // 最大圧縮のほうが小さいことを検証
+    expect(maxSize).toBeLessThan(standardSize);
   });
 
   test('ドラッグ＆ドロップ領域のスタイルが変化する', async ({ page }) => {

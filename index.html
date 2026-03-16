@@ -30,8 +30,26 @@
       <span id="fileSize" class="file-size"></span>
     </div>
 
+    <div class="preset-section">
+      <div class="preset-label">圧縮プリセット</div>
+      <div class="preset-buttons">
+        <button type="button" class="preset-btn" data-preset="light">
+          <span class="preset-name">軽量</span>
+          <span class="preset-desc">高品質・最小圧縮</span>
+        </button>
+        <button type="button" class="preset-btn active" data-preset="standard">
+          <span class="preset-name">標準</span>
+          <span class="preset-desc">バランス重視</span>
+        </button>
+        <button type="button" class="preset-btn" data-preset="maximum">
+          <span class="preset-name">最大圧縮</span>
+          <span class="preset-desc">サイズ優先</span>
+        </button>
+      </div>
+    </div>
+
     <details class="settings">
-      <summary>圧縮設定</summary>
+      <summary>詳細設定</summary>
       <div class="settings-grid">
         <div class="setting-item">
           <label for="jpegQuality">JPEG品質</label>
@@ -60,7 +78,8 @@
         <div class="setting-item">
           <label>透過画像の処理</label>
           <div class="radio-group">
-            <label><input type="radio" name="transparencyMode" value="flatten" checked> 白背景で合成</label>
+            <label><input type="radio" name="transparencyMode" value="compress" checked> 個別圧縮</label>
+            <label><input type="radio" name="transparencyMode" value="flatten"> 白背景で合成</label>
             <label><input type="radio" name="transparencyMode" value="skip"> スキップ</label>
           </div>
         </div>

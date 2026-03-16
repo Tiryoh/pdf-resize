@@ -234,4 +234,106 @@ async function generateTestPdfWithPng() {
   console.log(`Test PDF generated: ${outPath} (${(pdfBytes.length / 1024).toFixed(1)} KB)`);
 }
 
-generateTestPdfWithPng().catch(console.error);
+/**
+ * アルファチャネル付きPNGを生成（SMaskテスト用）
+ * color type 6 = RGBA
+ */
+function createPngBufferWithAlpha(width, height) {
+  const zlib = require('zlib');
+
+  // ピクセルデータ生成（RGBA グラデーション + アルファグラデーション）
+  const rawData = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * (width * 4 + 1);
+    rawData[rowOffset] = 0; // フィルターバイト: None
+    for (let x = 0; x < width; x++) {
+      const pixelOffset = rowOffset + 1 + x * 4;
+      rawData[pixelOffset] = Math.floor((x / width) * 255);       // R
+      rawData[pixelOffset + 1] = Math.floor((y / height) * 255);  // G
+      rawData[pixelOffset + 2] = 180;                               // B
+      // アルファ: 左上は透明、右下は不透明のグラデーション
+      const alpha = Math.floor(((x / width) * 0.5 + (y / height) * 0.5) * 255);
+      rawData[pixelOffset + 3] = Math.min(alpha, 254); // 254以下を保証してSMask生成を確実にする
+    }
+  }
+
+  const compressed = zlib.deflateSync(rawData, { level: 0 }); // 非圧縮で大きく
+
+  // PNGファイル構築
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+  // IHDR
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;  // bit depth
+  ihdr[9] = 6;  // color type: RGBA
+  ihdr[10] = 0; // compression
+  ihdr[11] = 0; // filter
+  ihdr[12] = 0; // interlace
+  const ihdrChunk = createPngChunk('IHDR', ihdr);
+
+  // IDAT
+  const idatChunk = createPngChunk('IDAT', compressed);
+
+  // IEND
+  const iendChunk = createPngChunk('IEND', Buffer.alloc(0));
+
+  return Buffer.concat([signature, ihdrChunk, idatChunk, iendChunk]);
+}
+
+/**
+ * SMask付きテストPDFを生成
+ * - Page 1: 大きなFlate/raw画像（不透明PNG）
+ * - Page 2: SMask付き画像（RGBA PNG）
+ * - Page 3: テキストのみ
+ */
+async function generateTestPdfWithSmask() {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  // ページ1: 大きなFlate/raw画像（不透明）
+  const page1 = pdfDoc.addPage([595, 842]);
+  page1.drawText('Page 1 - Opaque Flate Image', {
+    x: 50, y: 800, size: 18, font, color: rgb(0, 0, 0),
+  });
+
+  const opaquePng = createPngBuffer(1600, 1200);
+  const opaqueImage = await pdfDoc.embedPng(opaquePng);
+  page1.drawImage(opaqueImage, {
+    x: 50, y: 200, width: 495, height: 371,
+  });
+
+  // ページ2: SMask付き画像（RGBA）
+  const page2 = pdfDoc.addPage([595, 842]);
+  page2.drawText('Page 2 - Transparent Image with SMask', {
+    x: 50, y: 800, size: 18, font, color: rgb(0, 0, 0),
+  });
+
+  const alphaPng = createPngBufferWithAlpha(1200, 900);
+  const alphaImage = await pdfDoc.embedPng(alphaPng);
+  page2.drawImage(alphaImage, {
+    x: 50, y: 200, width: 495, height: 371,
+  });
+
+  // ページ3: テキストのみ
+  const page3 = pdfDoc.addPage([595, 842]);
+  page3.drawText('Page 3 - Text Only', {
+    x: 50, y: 800, size: 18, font, color: rgb(0, 0, 0),
+  });
+  for (let i = 0; i < 10; i++) {
+    page3.drawText(`Line ${i + 1}: Test content for compression verification.`, {
+      x: 50, y: 760 - i * 25, size: 11, font, color: rgb(0.1, 0.1, 0.1),
+    });
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  const outPath = path.join(__dirname, 'test-smask.pdf');
+  fs.writeFileSync(outPath, pdfBytes);
+  console.log(`SMask test PDF generated: ${outPath} (${(pdfBytes.length / 1024).toFixed(1)} KB)`);
+}
+
+Promise.all([
+  generateTestPdfWithPng(),
+  generateTestPdfWithSmask(),
+]).catch(console.error);
