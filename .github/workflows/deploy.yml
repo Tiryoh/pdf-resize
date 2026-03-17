@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Enable pnpm via corepack
+        run: corepack enable pnpm
+
       - name: Prepare dist
         run: |
           mkdir -p dist
