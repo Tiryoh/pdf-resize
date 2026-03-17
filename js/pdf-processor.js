@@ -141,35 +141,35 @@ const PdfProcessor = (() => {
 
     // JBIG2 / JPX はデコード不可
     if (filter === '/JBIG2Decode' || filter === '/JPXDecode') {
-      return { shouldProcess: false, reason: 'デコード不可 (JBIG2/JPX)' };
+      return { shouldProcess: false, reason: i18n.t('reason.jbig2') };
     }
 
     // CMYK はスキップ
     const cs = colorSpace.replace('/', '');
     if (cs === 'DeviceCMYK') {
-      return { shouldProcess: false, reason: 'CMYK画像' };
+      return { shouldProcess: false, reason: i18n.t('reason.cmyk') };
     }
 
     // Indexed (パレット画像) はスキップ
     if (cs === 'Indexed') {
-      return { shouldProcess: false, reason: 'パレット画像 (Indexed)' };
+      return { shouldProcess: false, reason: i18n.t('reason.indexed') };
     }
 
     // ICCBased の CMYK もスキップ（コンポーネント数で判定）
     if (cs === 'ICCBased') {
       // ICCBasedの場合、コンポーネント数が不明なのでスキップが安全
-      return { shouldProcess: false, reason: 'ICCBased (安全のためスキップ)' };
+      return { shouldProcess: false, reason: i18n.t('reason.iccbased') };
     }
 
     // コンポーネント数が不明な場合はスキップ
     const components = getComponentCount(colorSpace);
     if (components === null) {
-      return { shouldProcess: false, reason: `不明なColorSpace: ${colorSpace}` };
+      return { shouldProcess: false, reason: i18n.t('reason.unknownCS', { cs: colorSpace }) };
     }
 
     // 透過画像の処理
     if (smaskRef && transparencyMode === 'skip') {
-      return { shouldProcess: false, reason: '透過画像 (スキップ設定)' };
+      return { shouldProcess: false, reason: i18n.t('reason.transparencySkip') };
     }
 
     // Flate/raw画像はJPEG変換の効果が高いため閾値を下げる
@@ -179,15 +179,15 @@ const PdfProcessor = (() => {
 
     // ピクセル数チェック
     if (totalPixels < effectivePixelThreshold) {
-      return { shouldProcess: false, reason: `小さい画像 (${width}x${height})` };
+      return { shouldProcess: false, reason: i18n.t('reason.tooSmall', { w: width, h: height }) };
     }
 
     // データサイズチェック
     if (dataSize < effectiveByteThreshold) {
-      return { shouldProcess: false, reason: `データサイズ小 (${(dataSize / 1024).toFixed(1)}KB)` };
+      return { shouldProcess: false, reason: i18n.t('reason.tooSmallData', { size: (dataSize / 1024).toFixed(1) }) };
     }
 
-    return { shouldProcess: true, reason: '圧縮対象' };
+    return { shouldProcess: true, reason: i18n.t('reason.target') };
   }
 
   /**
@@ -392,7 +392,7 @@ const PdfProcessor = (() => {
           compressedTotalBytes += originalBytes;
           onProgress?.(i + 1, totalImages, {
             status: 'no-gain',
-            reason: `圧縮効果なし (${(compressedBytes.length / originalBytes * 100).toFixed(0)}%)`,
+            reason: i18n.t('reason.noGain', { pct: (compressedBytes.length / originalBytes * 100).toFixed(0) }),
             width: img.width,
             height: img.height,
           });
@@ -439,7 +439,10 @@ const PdfProcessor = (() => {
 
         onProgress?.(i + 1, totalImages, {
           status: 'compressed',
-          reason: `${(originalBytes / 1024).toFixed(0)}KB → ${(compressedBytes.length / 1024).toFixed(0)}KB`,
+          reason: i18n.t('reason.compressed', {
+            before: (originalBytes / 1024).toFixed(0),
+            after: (compressedBytes.length / 1024).toFixed(0),
+          }),
           width: img.width,
           height: img.height,
         });
