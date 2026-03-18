@@ -1,111 +1,130 @@
 # PDF Resize Tool
 
-ブラウザで完結するPDF軽量化ツール。テキスト選択やベクター要素を維持したまま、埋め込み画像のみを条件付きで再圧縮してファイルサイズを削減します。
+[日本語](README.ja.md)
 
-ファイルはサーバーに送信されず、すべての処理がブラウザ内で完結します。
+A browser-based PDF compression tool. Reduces file size by selectively re-compressing embedded images while preserving text selection, fonts, and vector elements.
 
-## 使い方
+All processing runs locally in your browser — no files are sent to any server.
 
-`index.html` をブラウザで開くか、ローカルサーバーを起動してアクセスします。
+## Usage
+
+Open `index.html` in a browser, or start a local server:
 
 ```bash
 python3 -m http.server 8000
-# http://localhost:8000 にアクセス
+# Visit http://localhost:8000
 ```
 
-1. PDFファイルをドラッグ＆ドロップ（またはクリックして選択）
-2. 必要に応じて圧縮設定を調整
-3. 「圧縮開始」をクリック
-4. 処理完了後「ダウンロード」で圧縮済みPDFを取得
+1. Drag & drop a PDF file (or click to select)
+2. Choose a compression preset or adjust settings
+3. Click "Compress"
+4. Download the compressed PDF
 
-## 圧縮の仕組み
+### Compression Presets
 
-PDF内のテキスト・フォント・ベクター要素はそのまま保持し、**埋め込み画像のみ**を条件付きで再圧縮します。
+| Preset | JPEG Quality | Max Dimension | Description |
+|---|---|---|---|
+| Light | 90% | 4096px | High quality, minimal compression |
+| Standard | 75% | 2048px | Balanced (default) |
+| Maximum | 50% | 1024px | Smallest file size |
 
-### 圧縮対象の条件
+## How It Works
 
-以下の**両方**を満たす画像のみ圧縮します。
+Text, fonts, and vector elements in the PDF are kept intact. Only **embedded images** are conditionally re-compressed.
 
-| 条件 | デフォルト閾値 |
+### Compression Targets
+
+Only images meeting **both** conditions are compressed:
+
+| Condition | Default Threshold |
 |---|---|
-| 画像の総ピクセル数 | 90,000以上（300x300相当） |
-| 生データサイズ | 100KB以上 |
+| Total pixel count | ≥ 90,000 (equivalent to 300×300) |
+| Raw data size | ≥ 100 KB |
 
-### スキップされる画像
+### Skipped Images
 
-以下のいずれかに該当する画像は圧縮しません。
+Images matching any of the following are left untouched:
 
-| 条件 | 理由 |
+| Condition | Reason |
 |---|---|
-| 小さい画像（アイコン・ロゴ等） | 劣化が目立つ |
-| データサイズが小さい | 削減効果が薄い |
-| JBIG2 / JPX 形式 | ブラウザでデコード不可 |
-| CMYK カラー | 色変換が複雑 |
-| パレット画像（Indexed） | ロゴ・図表等で劣化が目立つ |
-| 圧縮後サイズが元の90%以上 | 効果なしと判定し元データを保持 |
+| Small images (icons, logos, etc.) | Degradation would be noticeable |
+| Small data size | Negligible savings |
+| JBIG2 / JPX format | Cannot decode in browser |
+| CMYK color space | Complex color conversion |
+| Indexed/palette images | Logos and diagrams degrade visibly |
+| Compressed size ≥ 90% of original | Deemed ineffective; original data kept |
 
-### デフォルト設定
+### Transparency Handling
 
-| パラメータ | デフォルト値 | 説明 |
+| Mode | Description |
+|---|---|
+| Compress individually (default) | Compresses RGB and alpha mask (SMask) separately as JPEG |
+| Flatten to white | Composites onto white background before compression |
+| Skip | Leaves transparent images untouched |
+
+### Default Settings
+
+| Parameter | Default | Description |
 |---|---|---|
-| JPEG品質 | 75% | 再圧縮時のJPEG品質 |
-| 最大長辺 | 2048px | これを超える画像はダウンサンプリング |
-| 最小画像サイズ | 300px | 各辺がこれ未満の画像はスキップ |
-| 最小データサイズ | 100KB | これ未満の画像はスキップ |
-| 透過画像 | 白背景で合成 | スキップも選択可 |
+| JPEG Quality | 75% | Quality for JPEG re-encoding |
+| Max Dimension | 2048px | Images larger than this are downsampled |
+| Min Image Size | 300px | Images smaller than this on each side are skipped |
+| Min Data Size | 100 KB | Images below this threshold are skipped |
+| Transparency | Compress individually | Can also flatten or skip |
 
-## 開発
+## Development
 
-### 必要なもの
+### Prerequisites
 
 - Node.js 22+
 - pnpm
 
-### セットアップ
+### Setup
 
 ```bash
 pnpm install
 ```
 
-### テスト
+### Testing
 
 ```bash
-# テスト用PDFを生成
+# Generate test PDFs
 pnpm generate-test-pdf
 
-# E2Eテスト実行
+# Run E2E tests
 pnpm test
 ```
 
-### ファイル構成
+### File Structure
 
 ```
 pdf-resize/
-├── index.html              # メインHTML
-├── css/style.css           # スタイル
+├── index.html              # Main HTML
+├── css/style.css           # Styles
 ├── js/
-│   ├── app.js              # UIロジック・ファイルI/O
-│   ├── pdf-processor.js    # PDF解析・画像抽出・条件判定・置換
-│   └── image-compressor.js # Canvas APIによる画像再圧縮
+│   ├── i18n.js             # Internationalization (JA/EN)
+│   ├── app.js              # UI logic & file I/O
+│   ├── pdf-processor.js    # PDF parsing, image extraction & replacement
+│   └── image-compressor.js # Canvas-based image re-compression
 ├── tests/
-│   ├── e2e.spec.js         # E2Eテスト（Playwright）
-│   └── generate-test-pdf.js # テスト用PDF生成
-└── playwright.config.js    # テスト設定
+│   ├── e2e.spec.js         # E2E tests (Playwright)
+│   └── generate-test-pdf.js # Test PDF generation
+└── playwright.config.js    # Test configuration
 ```
 
-## 技術スタック
+## Tech Stack
 
-- [pdf-lib](https://github.com/Hopding/pdf-lib) — PDF構造の読み書き
-- [pako](https://github.com/nodeca/pako) — Flate圧縮/展開
-- Canvas API — 画像のダウンサンプリング・JPEG再圧縮
-- [Playwright](https://playwright.dev/) — E2Eテスト
+- [pdf-lib](https://github.com/Hopding/pdf-lib) — PDF read/write
+- [pako](https://github.com/nodeca/pako) — Flate compression/decompression
+- Canvas API — Image downsampling & JPEG re-encoding
+- [Playwright](https://playwright.dev/) — E2E testing
 
-## 制約事項
+## Limitations
 
-- パスワード保護されたPDFは処理できない場合があります
-- CMYK画像は安全のためスキップされます
-- 画像置換にpdf-libの内部APIを使用しているため、ライブラリのバージョンアップで動作が変わる可能性があります
+- Password-protected PDFs may not be processable
+- CMYK images are skipped for safety
+- Uses internal pdf-lib APIs for image replacement; behavior may change with library updates
 
-## ライセンス
+## License
 
 MIT
