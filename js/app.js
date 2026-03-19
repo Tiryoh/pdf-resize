@@ -100,7 +100,7 @@
 
   function handleFile(file) {
     if (!file || file.type !== 'application/pdf') {
-      alert('PDFファイルを選択してください。');
+      alert(i18n.t('alert.selectPdf'));
       return;
     }
 
@@ -170,6 +170,14 @@
     r.addEventListener('change', clearActivePreset);
   });
 
+  // --- 言語切り替え UI ---
+
+  document.querySelectorAll('.lang-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      i18n.setLang(btn.dataset.lang);
+    });
+  });
+
   // --- 圧縮処理 ---
 
   compressBtn.addEventListener('click', async () => {
@@ -179,13 +187,13 @@
     progressSection.hidden = false;
     resultSection.hidden = true;
     progressBar.style.width = '0%';
-    progressText.textContent = 'PDF を読み込み中...';
+    progressText.textContent = i18n.t('progress.reading');
 
     try {
       const arrayBuffer = await currentFile.arrayBuffer();
       const settings = getSettings();
 
-      progressText.textContent = '画像を解析中...';
+      progressText.textContent = i18n.t('progress.analyzing');
 
       const { outputBytes, stats } = await PdfProcessor.processPdf(
         arrayBuffer,
@@ -193,7 +201,12 @@
         (processed, total, info) => {
           const pct = Math.round((processed / total) * 100);
           progressBar.style.width = `${pct}%`;
-          progressText.textContent = `画像 ${processed}/${total} 処理中... (${info.status}: ${info.reason})`;
+          progressText.textContent = i18n.t('progress.image', {
+            processed: processed,
+            total: total,
+            status: info.status,
+            reason: info.reason,
+          });
         }
       );
 
@@ -206,7 +219,10 @@
       compressedSizeEl.textContent = formatSize(compressedBytes);
       reductionRateEl.textContent = `${reduction}%`;
       reductionRateEl.style.color = reduction > 0 ? '#34c759' : '#ff3b30';
-      imageStatsEl.textContent = `${stats.compressedCount}枚 (スキップ: ${stats.skippedCount}枚)`;
+      imageStatsEl.textContent = i18n.t('stats.result', {
+        count: stats.compressedCount,
+        skipped: stats.skippedCount,
+      });
 
       outputBlob = new Blob([outputBytes], { type: 'application/pdf' });
 
@@ -214,7 +230,7 @@
       resultSection.hidden = false;
     } catch (err) {
       console.error('PDF処理エラー:', err);
-      progressText.textContent = `エラー: ${err.message}`;
+      progressText.textContent = i18n.t('error.prefix', { message: err.message });
     } finally {
       compressBtn.disabled = false;
     }
