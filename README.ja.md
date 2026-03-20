@@ -8,7 +8,11 @@
 
 ## 使い方
 
-`index.html` をブラウザで開くか、ローカルサーバーを起動してアクセスします。
+使うだけなら、公開版の利用がおすすめです。
+
+https://pdf-resize.tiryoh.com/
+
+ローカルで動かす場合は、`index.html` をブラウザで開くか、ローカルサーバーを起動してアクセスします。
 
 ```bash
 python3 -m http.server 8000
