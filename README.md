@@ -8,7 +8,11 @@ All processing runs locally in your browser — no files are sent to any server.
 
 ## Usage
 
-Open `index.html` in a browser, or start a local server:
+If you just want to use it, the hosted version is recommended:
+
+https://pdf-resize.tiryoh.com/
+
+For local development, open `index.html` in a browser, or start a local server:
 
 ```bash
 python3 -m http.server 8000
