@@ -12,11 +12,12 @@ If you just want to use it, the hosted version is recommended:
 
 https://pdf-resize.tiryoh.com/
 
-For local development, open `index.html` in a browser, or start a local server:
+For local development, open `index.html` in a browser, or start a local preview server:
 
 ```bash
-python3 -m http.server 8000
-# Visit http://localhost:8000
+pnpm install
+pnpm run preview
+# Visit http://127.0.0.1:4173
 ```
 
 1. Drag & drop a PDF file (or click to select)
@@ -87,6 +88,13 @@ Images matching any of the following are left untouched:
 
 ```bash
 pnpm install
+```
+
+### Preview
+
+```bash
+pnpm run preview
+# Visit http://127.0.0.1:4173
 ```
 
 ### Testing
