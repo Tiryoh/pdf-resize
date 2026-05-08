@@ -19,6 +19,7 @@
   const compressedSizeEl = document.getElementById('compressedSize');
   const reductionRateEl = document.getElementById('reductionRate');
   const imageStatsEl = document.getElementById('imageStats');
+  const colorModeEl = document.getElementById('colorMode');
   const downloadBtn = document.getElementById('downloadBtn');
   const jpegQualityInput = document.getElementById('jpegQuality');
   const jpegQualityValue = document.getElementById('jpegQualityValue');
@@ -223,6 +224,7 @@
         count: stats.compressedCount,
         skipped: stats.skippedCount,
       });
+      colorModeEl.textContent = stats.colorMode;
 
       outputBlob = new Blob([outputBytes], { type: 'application/pdf' });
 
