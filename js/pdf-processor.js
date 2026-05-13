@@ -201,14 +201,6 @@ const PdfProcessor = (() => {
     const orderedModes = ['RGB', 'CMYK', 'Gray', 'Indexed', 'ICCBased', 'Unknown']
       .filter(mode => counts.has(mode));
 
-    if (orderedModes.length === 0) {
-      return {
-        primary: i18n.t('colorMode.undetectable'),
-        details: '',
-        display: i18n.t('colorMode.undetectable'),
-      };
-    }
-
     const translatedModes = orderedModes.map(mode => i18n.t(`colorMode.${mode.toLowerCase()}`));
     const primary = orderedModes.length === 1
       ? translatedModes[0]
