@@ -61,6 +61,7 @@ test.describe('PDF Resize Tool', () => {
     await expect(page.locator('#compressedSize')).not.toBeEmpty();
     await expect(page.locator('#reductionRate')).not.toBeEmpty();
     await expect(page.locator('#imageStats')).not.toBeEmpty();
+    await expect(page.locator('#colorMode')).not.toBeEmpty();
 
     // ダウンロードボタンが存在する
     await expect(page.locator('#downloadBtn')).toBeVisible();

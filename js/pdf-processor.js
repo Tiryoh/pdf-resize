@@ -51,7 +51,7 @@ const PdfProcessor = (() => {
 
       // ColorSpace
       const colorSpaceObj = dict.get(PDFName.of('ColorSpace'));
-      const colorSpace = resolveColorSpace(colorSpaceObj, context);
+      const { colorSpace, colorMode } = resolveColorProfile(colorSpaceObj, context);
 
       // SMask (透過)
       const smaskRef = dict.get(PDFName.of('SMask'));
@@ -69,6 +69,7 @@ const PdfProcessor = (() => {
         bitsPerComponent: Number(bitsPerComponent),
         filter,
         colorSpace,
+        colorMode,
         smaskRef,
         dataSize,
       });
@@ -106,6 +107,113 @@ const PdfProcessor = (() => {
       return first?.toString() ?? 'Unknown';
     }
     return csObj.toString?.() ?? 'Unknown';
+  }
+
+  /**
+   * ColorSpaceから表示用の色情報を解決
+   */
+  function resolveColorProfile(csObj, context) {
+    if (!csObj) {
+      return { colorSpace: 'DeviceRGB', colorMode: 'RGB' };
+    }
+
+    if (csObj instanceof PDFRef) {
+      const resolved = context.lookup(csObj);
+      return resolveColorProfile(resolved, context);
+    }
+
+    const colorSpace = resolveColorSpace(csObj, context);
+
+    if (csObj instanceof PDFArray && csObj.size() > 0) {
+      const first = csObj.get(0)?.toString() ?? 'Unknown';
+      if (first === '/ICCBased') {
+        return {
+          colorSpace,
+          colorMode: mapComponentCountToColorMode(resolveIccComponentCount(csObj.get(1), context)) ?? 'ICCBased',
+        };
+      }
+
+      if (first === '/Indexed') {
+        return { colorSpace, colorMode: 'Indexed' };
+      }
+    }
+
+    return { colorSpace, colorMode: classifyColorMode(colorSpace) };
+  }
+
+  /**
+   * ICCBasedのコンポーネント数を取得
+   */
+  function resolveIccComponentCount(iccObj, context) {
+    if (!iccObj) return null;
+    const resolved = iccObj instanceof PDFRef ? context.lookup(iccObj) : iccObj;
+    const dict = resolved?.dict ?? resolved;
+    const count = getNumericValue(dict?.get?.(PDFName.of('N')));
+    return Number.isFinite(count) ? Number(count) : null;
+  }
+
+  /**
+   * ColorSpace名をRGB/CMYKなどの表示用モードへ正規化
+   */
+  function classifyColorMode(colorSpace) {
+    const cs = colorSpace.replace('/', '');
+    switch (cs) {
+      case 'DeviceGray':
+      case 'CalGray':
+        return 'Gray';
+      case 'DeviceRGB':
+      case 'CalRGB':
+        return 'RGB';
+      case 'DeviceCMYK':
+        return 'CMYK';
+      case 'Indexed':
+        return 'Indexed';
+      case 'ICCBased':
+        return 'ICCBased';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  /**
+   * コンポーネント数を色モード名に変換
+   */
+  function mapComponentCountToColorMode(components) {
+    switch (components) {
+      case 1: return 'Gray';
+      case 3: return 'RGB';
+      case 4: return 'CMYK';
+      default: return null;
+    }
+  }
+
+  /**
+   * PDF内画像の色モード概要を作成
+   */
+  function summarizeColorModes(images) {
+    const counts = new Map();
+
+    for (const image of images) {
+      const mode = image.colorMode ?? 'Unknown';
+      counts.set(mode, (counts.get(mode) ?? 0) + 1);
+    }
+
+    const orderedModes = ['RGB', 'CMYK', 'Gray', 'Indexed', 'ICCBased', 'Unknown']
+      .filter(mode => counts.has(mode));
+
+    const translatedModes = orderedModes.map(mode => i18n.t(`colorMode.${mode.toLowerCase()}`));
+    const primary = orderedModes.length === 1
+      ? translatedModes[0]
+      : i18n.t('colorMode.mixed', { modes: translatedModes.join('/') });
+    const details = orderedModes
+      .map(mode => `${i18n.t(`colorMode.${mode.toLowerCase()}`)}:${counts.get(mode)}`)
+      .join(', ');
+
+    return {
+      primary,
+      details,
+      display: details ? `${primary} (${details})` : primary,
+    };
   }
 
   /**
@@ -343,9 +451,18 @@ const PdfProcessor = (() => {
       const outputBytes = await pdfDoc.save();
       return {
         outputBytes,
-        stats: { totalImages: 0, compressedCount: 0, skippedCount: 0, originalTotalBytes: 0, compressedTotalBytes: 0 },
+        stats: {
+          totalImages: 0,
+          compressedCount: 0,
+          skippedCount: 0,
+          originalTotalBytes: 0,
+          compressedTotalBytes: 0,
+          colorMode: i18n.t('colorMode.undetectable'),
+        },
       };
     }
+
+    const colorSummary = summarizeColorModes(images);
 
     let processedCount = 0;
     let compressedCount = 0;
@@ -468,6 +585,7 @@ const PdfProcessor = (() => {
         skippedCount,
         originalTotalBytes,
         compressedTotalBytes,
+        colorMode: colorSummary.display,
       },
     };
   }
